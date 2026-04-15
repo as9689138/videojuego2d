@@ -1,8 +1,10 @@
 const canvas = document.getElementById("canvas");
 let ctx = canvas.getContext("2d");
 
-const TOTAL_OBJECTS = 20;
+const TOTAL_OBJECTS = 25;
 const TOP_MARGIN = 12;
+
+const MOVEMENT_TYPES = ["up", "down", "diagonal", "circular"];
 
 let objects = [];
 let eliminations = 0;
@@ -16,6 +18,11 @@ backgroundImage.src = "assets/img/fondoEspacio.jpg";
 
 const spriteImage = new Image();
 spriteImage.src = "assets/img/nave.png";
+
+function getRandomMovementType() {
+    const index = Math.floor(Math.random() * MOVEMENT_TYPES.length);
+    return MOVEMENT_TYPES[index];
+}
 
 function getSpeedLevel() {
     if (eliminations > 15) {
@@ -51,7 +58,7 @@ function getSpeedLevel() {
 }
 
 class FallingObject {
-    constructor(x, y, size, sprite, speedY, speedX = 0) {
+    constructor(x, y, size, sprite, speedY, speedX = 0, movementType = "down") {
         this.posX = x;
         this.posY = y;
 
@@ -65,11 +72,21 @@ class FallingObject {
 
         this.dx = speedX;
         this.dy = speedY;
-        this.gravity = 0.015;
 
         this.flashFrames = 0;
         this.hitboxPadding = 18;
         this.isHovered = false;
+
+        this.movementType = movementType;
+
+        // Parámetros para movimiento circular
+        this.angle = randomBetween(0, Math.PI * 2);
+        this.angularSpeed = randomBetween(0.03, 0.06);
+        this.orbitRadius = randomBetween(20, 45);
+        this.centerX = x;
+        this.centerY = y;
+        this.centerDx = randomBetween(-1.2, 1.2);
+        this.centerDy = randomBetween(-1.2, 1.2);
     }
 
     draw(context) {
@@ -94,25 +111,30 @@ class FallingObject {
     }
 
     move() {
-        this.dy += this.gravity;
+        if (this.movementType === "circular") {
+            this.moveCircular();
+        } else {
+            this.moveLinear();
+        }
+    }
+
+    moveLinear() {
         this.posX += this.dx;
         this.posY += this.dy;
     }
 
-    checkSideCollision(canvasWidth) {
-        if (this.posX + this.hitRadius >= canvasWidth) {
-            this.posX = canvasWidth - this.hitRadius;
-            this.dx = -this.dx;
-        }
+    moveCircular() {
+        this.centerX += this.centerDx;
+        this.centerY += this.centerDy;
 
-        if (this.posX - this.hitRadius <= 0) {
-            this.posX = this.hitRadius;
-            this.dx = -this.dx;
-        }
+        this.angle += this.angularSpeed;
+
+        this.posX = this.centerX + Math.cos(this.angle) * this.orbitRadius;
+        this.posY = this.centerY + Math.sin(this.angle) * this.orbitRadius;
     }
 
     isOutOfBounds(canvasWidth, canvasHeight) {
-        const margin = this.hitRadius + 40;
+        const margin = this.hitRadius + 60;
 
         return (
             this.posX < -margin ||
@@ -177,6 +199,16 @@ class FallingObject {
 
         otherObject.posX += unitX * (overlap / 2);
         otherObject.posY += unitY * (overlap / 2);
+
+        if (this.movementType === "circular") {
+            this.centerX = this.posX;
+            this.centerY = this.posY;
+        }
+
+        if (otherObject.movementType === "circular") {
+            otherObject.centerX = otherObject.posX;
+            otherObject.centerY = otherObject.posY;
+        }
     }
 
     keepInside(canvasWidth, canvasHeight) {
@@ -195,17 +227,42 @@ class FallingObject {
         if (this.posY + this.hitRadius > canvasHeight) {
             this.posY = canvasHeight - this.hitRadius;
         }
+
+        if (this.movementType === "circular") {
+            this.centerX = this.posX;
+            this.centerY = this.posY;
+        }
     }
 
     applySpeedLevel() {
         const speedLevel = getSpeedLevel();
 
-        if (this.dy > 0) {
-            this.dy = Math.max(this.dy, randomBetween(speedLevel.minY, speedLevel.maxY));
+        if (this.movementType === "up") {
+            this.dy = -randomBetween(speedLevel.minY, speedLevel.maxY);
+            this.dx = randomBetween(-0.8, 0.8);
+        } else if (this.movementType === "down") {
+            this.dy = randomBetween(speedLevel.minY, speedLevel.maxY);
+            this.dx = randomBetween(-0.8, 0.8);
+        } else if (this.movementType === "diagonal") {
+            this.dx = randomBetween(-2.2, 2.2);
+            if (Math.abs(this.dx) < 0.8) {
+                this.dx = this.dx < 0 ? -0.8 : 0.8;
+            }
+
+            this.dy = randomBetween(-2.2, 2.2);
+            if (Math.abs(this.dy) < 0.8) {
+                this.dy = this.dy < 0 ? -0.8 : 0.8;
+            }
+        } else if (this.movementType === "circular") {
+            this.angularSpeed = randomBetween(0.03, 0.06);
+            this.orbitRadius = randomBetween(20, 45);
+            this.centerDx = randomBetween(-1.5, 1.5);
+            this.centerDy = randomBetween(-1.5, 1.5);
         }
     }
 
     respawnFromRandomSide(existingObjects, canvasWidth, canvasHeight) {
+        const newMovementType = getRandomMovementType();
         const newPosition = findSpawnPosition(
             this.hitRadius,
             existingObjects,
@@ -213,14 +270,26 @@ class FallingObject {
             canvasHeight
         );
 
-        const velocity = getSpawnVelocity(newPosition.side);
+        const velocity = getVelocityByMovement(newMovementType);
 
         this.posX = newPosition.x;
         this.posY = newPosition.y;
+
         this.dx = velocity.dx;
         this.dy = velocity.dy;
+
+        this.movementType = newMovementType;
+
         this.flashFrames = 0;
         this.isHovered = false;
+
+        this.angle = randomBetween(0, Math.PI * 2);
+        this.angularSpeed = randomBetween(0.03, 0.06);
+        this.orbitRadius = randomBetween(20, 45);
+        this.centerX = this.posX;
+        this.centerY = this.posY;
+        this.centerDx = randomBetween(-1.2, 1.2);
+        this.centerDy = randomBetween(-1.2, 1.2);
     }
 
     update(context, canvasWidth, canvasHeight, allObjects) {
@@ -259,25 +328,21 @@ function findSpawnPosition(hitRadius, existingObjects, canvasWidth, canvasHeight
     let attempts = 0;
 
     const spawnMargin = hitRadius + 30;
-    const side = Math.floor(Math.random() * 4); // 0=arriba, 1=derecha, 2=abajo, 3=izquierda
+    const side = Math.floor(Math.random() * 4);
 
     while (!validPosition && attempts < 150) {
         attempts++;
 
         if (side === 0) {
-            // Arriba
             x = randomBetween(hitRadius, canvasWidth - hitRadius);
             y = -spawnMargin;
         } else if (side === 1) {
-            // Derecha
             x = canvasWidth + spawnMargin;
             y = randomBetween(hitRadius, canvasHeight - hitRadius);
         } else if (side === 2) {
-            // Abajo
             x = randomBetween(hitRadius, canvasWidth - hitRadius);
             y = canvasHeight + spawnMargin;
         } else {
-            // Izquierda
             x = -spawnMargin;
             y = randomBetween(hitRadius, canvasHeight - hitRadius);
         }
@@ -299,22 +364,49 @@ function findSpawnPosition(hitRadius, existingObjects, canvasWidth, canvasHeight
     }
 
     if (!validPosition) {
-        if (side === 0) {
-            x = randomBetween(hitRadius, canvasWidth - hitRadius);
-            y = -spawnMargin;
-        } else if (side === 1) {
-            x = canvasWidth + spawnMargin;
-            y = randomBetween(hitRadius, canvasHeight - hitRadius);
-        } else if (side === 2) {
-            x = randomBetween(hitRadius, canvasWidth - hitRadius);
-            y = canvasHeight + spawnMargin;
-        } else {
-            x = -spawnMargin;
-            y = randomBetween(hitRadius, canvasHeight - hitRadius);
-        }
+        x = randomBetween(hitRadius, canvasWidth - hitRadius);
+        y = -spawnMargin;
     }
 
-    return { x, y, side };
+    return { x, y };
+}
+
+function getVelocityByMovement(movementType) {
+    const speedLevel = getSpeedLevel();
+
+    if (movementType === "up") {
+        return {
+            dx: randomBetween(-0.8, 0.8),
+            dy: -randomBetween(speedLevel.minY, speedLevel.maxY)
+        };
+    }
+
+    if (movementType === "down") {
+        return {
+            dx: randomBetween(-0.8, 0.8),
+            dy: randomBetween(speedLevel.minY, speedLevel.maxY)
+        };
+    }
+
+    if (movementType === "diagonal") {
+        let dx = randomBetween(-2.2, 2.2);
+        let dy = randomBetween(-2.2, 2.2);
+
+        if (Math.abs(dx) < 0.8) {
+            dx = dx < 0 ? -0.8 : 0.8;
+        }
+
+        if (Math.abs(dy) < 0.8) {
+            dy = dy < 0 ? -0.8 : 0.8;
+        }
+
+        return { dx, dy };
+    }
+
+    return {
+        dx: 0,
+        dy: 0
+    };
 }
 
 function getSpawnVelocity(side) {
@@ -357,7 +449,8 @@ function createObject(existingObjects) {
     const size = randomBetween(28, 48);
     const hitRadius = size * 0.45;
     const position = findSpawnPosition(hitRadius, existingObjects, canvas.width, canvas.height);
-    const velocity = getSpawnVelocity(position.side);
+    const movementType = getRandomMovementType();
+    const velocity = getVelocityByMovement(movementType);
 
     return new FallingObject(
         position.x,
@@ -365,7 +458,8 @@ function createObject(existingObjects) {
         size,
         spriteImage,
         velocity.dy,
-        velocity.dx
+        velocity.dx,
+        movementType
     );
 }
 
