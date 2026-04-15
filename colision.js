@@ -173,42 +173,51 @@ class FallingObject {
     }
 
     bounceWith(otherObject) {
-        const tempDx = this.dx;
-        const tempDy = this.dy;
-
-        this.dx = otherObject.dx;
-        this.dy = otherObject.dy;
-
-        otherObject.dx = tempDx;
-        otherObject.dy = tempDy;
-
         const dx = otherObject.posX - this.posX;
         const dy = otherObject.posY - this.posY;
-        const distance = Math.sqrt(dx * dx + dy * dy);
+        let distance = Math.sqrt(dx * dx + dy * dy);
 
         if (distance === 0) {
-            return;
+            distance = 0.01;
         }
 
-        const overlap = (this.hitRadius + otherObject.hitRadius) - distance;
         const unitX = dx / distance;
         const unitY = dy / distance;
 
-        this.posX -= unitX * (overlap / 2);
-        this.posY -= unitY * (overlap / 2);
+        // Separar objetos para que no queden encimados
+        const overlap = (this.hitRadius + otherObject.hitRadius) - distance;
 
-        otherObject.posX += unitX * (overlap / 2);
-        otherObject.posY += unitY * (overlap / 2);
+        if (overlap > 0) {
+            this.posX -= unitX * (overlap / 2);
+            this.posY -= unitY * (overlap / 2);
 
-        if (this.movementType === "circular") {
-            this.centerX = this.posX;
-            this.centerY = this.posY;
+            otherObject.posX += unitX * (overlap / 2);
+            otherObject.posY += unitY * (overlap / 2);
         }
 
-        if (otherObject.movementType === "circular") {
-            otherObject.centerX = otherObject.posX;
-            otherObject.centerY = otherObject.posY;
-        }
+        // Magnitud base del rebote según la velocidad previa
+        const speedThis = Math.sqrt(this.dx * this.dx + this.dy * this.dy) || 1.5;
+        const speedOther = Math.sqrt(otherObject.dx * otherObject.dx + otherObject.dy * otherObject.dy) || 1.5;
+
+        const reboundThis = Math.max(speedOther, 1.5);
+        const reboundOther = Math.max(speedThis, 1.5);
+
+        // Salen despedidos en direcciones opuestas según la normal del choque
+        this.dx = -unitX * reboundThis;
+        this.dy = -unitY * reboundThis;
+
+        otherObject.dx = unitX * reboundOther;
+        otherObject.dy = unitY * reboundOther;
+
+        // Ambos pierden comportamiento especial y pasan a lineal
+        this.movementType = "linear";
+        otherObject.movementType = "linear";
+
+        // Reiniciar datos circulares para que no sigan interfiriendo
+        this.centerX = this.posX;
+        this.centerY = this.posY;
+        otherObject.centerX = otherObject.posX;
+        otherObject.centerY = otherObject.posY;
     }
 
     keepInside(canvasWidth, canvasHeight) {
