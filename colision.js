@@ -1,0 +1,608 @@
+const canvas = document.getElementById("canvas");
+let ctx = canvas.getContext("2d");
+
+const TOTAL_OBJECTS = 20;
+const TOP_MARGIN = 12;
+
+let objects = [];
+let eliminations = 0;
+
+let mouseX = 0;
+let mouseY = 0;
+let hoveredObjectIndex = -1;
+
+const backgroundImage = new Image();
+backgroundImage.src = "assets/img/fondoEspacio.jpg";
+
+const spriteImage = new Image();
+spriteImage.src = "assets/img/nave.png";
+
+function getSpeedLevel() {
+    if (eliminations > 15) {
+        return {
+            minY: 4.2,
+            maxY: 6.2,
+            label: "Alta",
+            bg: "rgba(239, 68, 68, 0.92)",
+            border: "#b91c1c",
+            text: "#ffffff"
+        };
+    }
+
+    if (eliminations > 10) {
+        return {
+            minY: 2.8,
+            maxY: 4.2,
+            label: "Media",
+            bg: "rgba(245, 158, 11, 0.92)",
+            border: "#b45309",
+            text: "#ffffff"
+        };
+    }
+
+    return {
+        minY: 1.2,
+        maxY: 2.8,
+        label: "Inicial",
+        bg: "rgba(59, 130, 246, 0.92)",
+        border: "#1d4ed8",
+        text: "#ffffff"
+    };
+}
+
+class FallingObject {
+    constructor(x, y, size, sprite, speedY, speedX = 0) {
+        this.posX = x;
+        this.posY = y;
+
+        this.size = size;
+
+        this.width = size * 1.35;
+        this.height = size * 1.8;
+        this.hitRadius = size * 0.45;
+
+        this.sprite = sprite;
+
+        this.dx = speedX;
+        this.dy = speedY;
+        this.gravity = 0.015;
+
+        this.flashFrames = 0;
+        this.hitboxPadding = 18;
+        this.isHovered = false;
+    }
+
+    draw(context) {
+        const drawX = this.posX - this.width / 2;
+        const drawY = this.posY - this.height / 2;
+
+        if (this.flashFrames > 0) {
+            context.save();
+            context.shadowColor = "rgba(0, 102, 255, 0.75)";
+            context.shadowBlur = 18;
+            context.drawImage(this.sprite, drawX, drawY, this.width, this.height);
+            context.restore();
+        } else if (this.isHovered) {
+            context.save();
+            context.shadowColor = "rgba(255, 255, 255, 0.9)";
+            context.shadowBlur = 14;
+            context.drawImage(this.sprite, drawX, drawY, this.width, this.height);
+            context.restore();
+        } else {
+            context.drawImage(this.sprite, drawX, drawY, this.width, this.height);
+        }
+    }
+
+    move() {
+        this.dy += this.gravity;
+        this.posX += this.dx;
+        this.posY += this.dy;
+    }
+
+    checkSideCollision(canvasWidth) {
+        if (this.posX + this.hitRadius >= canvasWidth) {
+            this.posX = canvasWidth - this.hitRadius;
+            this.dx = -this.dx;
+        }
+
+        if (this.posX - this.hitRadius <= 0) {
+            this.posX = this.hitRadius;
+            this.dx = -this.dx;
+        }
+    }
+
+    isOutOfBounds(canvasWidth, canvasHeight) {
+        const margin = this.hitRadius + 40;
+
+        return (
+            this.posX < -margin ||
+            this.posX > canvasWidth + margin ||
+            this.posY < -margin ||
+            this.posY > canvasHeight + margin
+        );
+    }
+
+    getDistance(otherObject) {
+        const dx = otherObject.posX - this.posX;
+        const dy = otherObject.posY - this.posY;
+        return Math.sqrt(dx * dx + dy * dy);
+    }
+
+    isCollidingWith(otherObject) {
+        return this.getDistance(otherObject) <= (this.hitRadius + otherObject.hitRadius);
+    }
+
+    containsPoint(x, y) {
+        const dx = x - this.posX;
+        const dy = y - this.posY;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+
+        return distance <= (this.hitRadius + this.hitboxPadding);
+    }
+
+    flashBlue() {
+        this.flashFrames = 6;
+    }
+
+    restoreFlash() {
+        if (this.flashFrames > 0) {
+            this.flashFrames--;
+        }
+    }
+
+    bounceWith(otherObject) {
+        const tempDx = this.dx;
+        const tempDy = this.dy;
+
+        this.dx = otherObject.dx;
+        this.dy = otherObject.dy;
+
+        otherObject.dx = tempDx;
+        otherObject.dy = tempDy;
+
+        const dx = otherObject.posX - this.posX;
+        const dy = otherObject.posY - this.posY;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+
+        if (distance === 0) {
+            return;
+        }
+
+        const overlap = (this.hitRadius + otherObject.hitRadius) - distance;
+        const unitX = dx / distance;
+        const unitY = dy / distance;
+
+        this.posX -= unitX * (overlap / 2);
+        this.posY -= unitY * (overlap / 2);
+
+        otherObject.posX += unitX * (overlap / 2);
+        otherObject.posY += unitY * (overlap / 2);
+    }
+
+    keepInside(canvasWidth, canvasHeight) {
+        if (this.posX - this.hitRadius < 0) {
+            this.posX = this.hitRadius;
+        }
+
+        if (this.posX + this.hitRadius > canvasWidth) {
+            this.posX = canvasWidth - this.hitRadius;
+        }
+
+        if (this.posY - this.hitRadius < 0) {
+            this.posY = this.hitRadius;
+        }
+
+        if (this.posY + this.hitRadius > canvasHeight) {
+            this.posY = canvasHeight - this.hitRadius;
+        }
+    }
+
+    applySpeedLevel() {
+        const speedLevel = getSpeedLevel();
+
+        if (this.dy > 0) {
+            this.dy = Math.max(this.dy, randomBetween(speedLevel.minY, speedLevel.maxY));
+        }
+    }
+
+    respawnFromRandomSide(existingObjects, canvasWidth, canvasHeight) {
+        const newPosition = findSpawnPosition(
+            this.hitRadius,
+            existingObjects,
+            canvasWidth,
+            canvasHeight
+        );
+
+        const velocity = getSpawnVelocity(newPosition.side);
+
+        this.posX = newPosition.x;
+        this.posY = newPosition.y;
+        this.dx = velocity.dx;
+        this.dy = velocity.dy;
+        this.flashFrames = 0;
+        this.isHovered = false;
+    }
+
+    update(context, canvasWidth, canvasHeight, allObjects) {
+        this.move();
+
+        if (this.isOutOfBounds(canvasWidth, canvasHeight)) {
+            this.respawnFromRandomSide(allObjects, canvasWidth, canvasHeight);
+        }
+
+        this.restoreFlash();
+        this.draw(context);
+    }
+}
+
+function resizeCanvas() {
+    canvas.width = canvas.clientWidth;
+    canvas.height = canvas.clientHeight;
+
+    objects.forEach(object => {
+        object.keepInside(canvas.width, canvas.height);
+    });
+}
+
+function randomBetween(min, max) {
+    return Math.random() * (max - min) + min;
+}
+
+function randomPosition(radius, max) {
+    return Math.random() * (max - radius * 2) + radius;
+}
+
+function findSpawnPosition(hitRadius, existingObjects, canvasWidth, canvasHeight) {
+    let x;
+    let y;
+    let validPosition = false;
+    let attempts = 0;
+
+    const spawnMargin = hitRadius + 30;
+    const side = Math.floor(Math.random() * 4); // 0=arriba, 1=derecha, 2=abajo, 3=izquierda
+
+    while (!validPosition && attempts < 150) {
+        attempts++;
+
+        if (side === 0) {
+            // Arriba
+            x = randomBetween(hitRadius, canvasWidth - hitRadius);
+            y = -spawnMargin;
+        } else if (side === 1) {
+            // Derecha
+            x = canvasWidth + spawnMargin;
+            y = randomBetween(hitRadius, canvasHeight - hitRadius);
+        } else if (side === 2) {
+            // Abajo
+            x = randomBetween(hitRadius, canvasWidth - hitRadius);
+            y = canvasHeight + spawnMargin;
+        } else {
+            // Izquierda
+            x = -spawnMargin;
+            y = randomBetween(hitRadius, canvasHeight - hitRadius);
+        }
+
+        validPosition = true;
+
+        for (let i = 0; i < existingObjects.length; i++) {
+            const other = existingObjects[i];
+
+            const dx = other.posX - x;
+            const dy = other.posY - y;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+
+            if (distance < other.hitRadius + hitRadius + 10) {
+                validPosition = false;
+                break;
+            }
+        }
+    }
+
+    if (!validPosition) {
+        if (side === 0) {
+            x = randomBetween(hitRadius, canvasWidth - hitRadius);
+            y = -spawnMargin;
+        } else if (side === 1) {
+            x = canvasWidth + spawnMargin;
+            y = randomBetween(hitRadius, canvasHeight - hitRadius);
+        } else if (side === 2) {
+            x = randomBetween(hitRadius, canvasWidth - hitRadius);
+            y = canvasHeight + spawnMargin;
+        } else {
+            x = -spawnMargin;
+            y = randomBetween(hitRadius, canvasHeight - hitRadius);
+        }
+    }
+
+    return { x, y, side };
+}
+
+function getSpawnVelocity(side) {
+    const speedLevel = getSpeedLevel();
+    const mainSpeed = randomBetween(speedLevel.minY, speedLevel.maxY);
+    const sideSpeed = randomBetween(-1.2, 1.2);
+
+    if (side === 0) {
+        // Arriba -> hacia abajo
+        return {
+            dx: sideSpeed,
+            dy: mainSpeed
+        };
+    }
+
+    if (side === 1) {
+        // Derecha -> hacia izquierda
+        return {
+            dx: -mainSpeed,
+            dy: sideSpeed
+        };
+    }
+
+    if (side === 2) {
+        // Abajo -> hacia arriba
+        return {
+            dx: sideSpeed,
+            dy: -mainSpeed
+        };
+    }
+
+    // Izquierda -> hacia derecha
+    return {
+        dx: mainSpeed,
+        dy: sideSpeed
+    };
+}
+
+function createObject(existingObjects) {
+    const size = randomBetween(28, 48);
+    const hitRadius = size * 0.45;
+    const position = findSpawnPosition(hitRadius, existingObjects, canvas.width, canvas.height);
+    const velocity = getSpawnVelocity(position.side);
+
+    return new FallingObject(
+        position.x,
+        position.y,
+        size,
+        spriteImage,
+        velocity.dy,
+        velocity.dx
+    );
+}
+
+function generateObjects(n) {
+    objects = [];
+
+    for (let i = 0; i < n; i++) {
+        objects.push(createObject(objects));
+    }
+}
+
+function handleObjectCollisions() {
+    for (let i = 0; i < objects.length; i++) {
+        for (let j = i + 1; j < objects.length; j++) {
+            if (objects[i].isCollidingWith(objects[j])) {
+                objects[i].flashBlue();
+                objects[j].flashBlue();
+                objects[i].bounceWith(objects[j]);
+            }
+        }
+    }
+}
+
+function updateAllObjectSpeeds() {
+    objects.forEach(object => {
+        object.applySpeedLevel();
+    });
+}
+
+function maintainObjectCount() {
+    while (objects.length < TOTAL_OBJECTS) {
+        const newObject = createObject(objects);
+        objects.push(newObject);
+    }
+}
+
+function getPointerPosition(event) {
+    const rect = canvas.getBoundingClientRect();
+
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+
+    return {
+        x: (event.clientX - rect.left) * scaleX,
+        y: (event.clientY - rect.top) * scaleY
+    };
+}
+
+function updateHoveredObject(pointerX, pointerY) {
+    hoveredObjectIndex = -1;
+
+    objects.forEach(object => {
+        object.isHovered = false;
+    });
+
+    for (let i = objects.length - 1; i >= 0; i--) {
+        if (objects[i].containsPoint(pointerX, pointerY)) {
+            hoveredObjectIndex = i;
+            objects[i].isHovered = true;
+            break;
+        }
+    }
+
+    canvas.style.cursor = hoveredObjectIndex !== -1 ? "pointer" : "default";
+}
+
+function removeHoveredObject() {
+    if (hoveredObjectIndex !== -1) {
+        objects.splice(hoveredObjectIndex, 1);
+        eliminations++;
+        hoveredObjectIndex = -1;
+
+        updateAllObjectSpeeds();
+        maintainObjectCount();
+        updateHoveredObject(mouseX, mouseY);
+    }
+}
+
+function drawEliminationCounter(context) {
+    let mode = "Inicial";
+    let bg = "rgba(59,130,246,0.85)";
+    let border = "#2563eb";
+
+    if (eliminations > 15) {
+        mode = "Alta";
+        bg = "rgba(239,68,68,0.9)";
+        border = "#b91c1c";
+    } else if (eliminations > 10) {
+        mode = "Media";
+        bg = "rgba(245,158,11,0.9)";
+        border = "#b45309";
+    }
+
+    const paddingX = 18;
+
+    const text1 = "Eliminaciones: " + eliminations;
+    const text2 = "Modo: " + mode;
+
+    context.save();
+
+    context.font = "bold 18px Arial";
+    const width = Math.max(
+        context.measureText(text1).width,
+        context.measureText(text2).width
+    );
+
+    const boxWidth = width + paddingX * 2;
+    const boxHeight = 64;
+
+    const x = canvas.width - boxWidth - 20;
+    const y = 20;
+
+    context.shadowColor = "rgba(0,0,0,0.25)";
+    context.shadowBlur = 14;
+    context.shadowOffsetY = 6;
+
+    context.fillStyle = bg;
+    context.strokeStyle = border;
+    context.lineWidth = 2;
+
+    if (typeof context.roundRect === "function") {
+        context.beginPath();
+        context.roundRect(x, y, boxWidth, boxHeight, 16);
+        context.fill();
+        context.stroke();
+        context.closePath();
+    } else {
+        context.fillRect(x, y, boxWidth, boxHeight);
+        context.strokeRect(x, y, boxWidth, boxHeight);
+    }
+
+    context.shadowColor = "transparent";
+    context.shadowBlur = 0;
+    context.shadowOffsetY = 0;
+
+    context.fillStyle = "#ffffff";
+    context.textAlign = "left";
+    context.textBaseline = "middle";
+
+    context.fillText(text1, x + paddingX, y + 24);
+    context.fillText(text2, x + paddingX, y + 44);
+
+    context.restore();
+}
+
+function drawBackground() {
+    if (!(backgroundImage.complete && backgroundImage.naturalWidth > 0)) {
+        ctx.fillStyle = "#0f172a";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        return;
+    }
+
+    const imgWidth = backgroundImage.naturalWidth;
+    const imgHeight = backgroundImage.naturalHeight;
+
+    const canvasRatio = canvas.width / canvas.height;
+    const imageRatio = imgWidth / imgHeight;
+
+    let drawWidth;
+    let drawHeight;
+    let offsetX;
+    let offsetY;
+
+    if (imageRatio > canvasRatio) {
+        drawHeight = canvas.height;
+        drawWidth = drawHeight * imageRatio;
+        offsetX = (canvas.width - drawWidth) / 2;
+        offsetY = 0;
+    } else {
+        drawWidth = canvas.width;
+        drawHeight = drawWidth / imageRatio;
+        offsetX = 0;
+        offsetY = (canvas.height - drawHeight) / 2;
+    }
+
+    ctx.drawImage(backgroundImage, offsetX, offsetY, drawWidth, drawHeight);
+}
+
+function animate() {
+    drawBackground();
+    handleObjectCollisions();
+
+    objects.forEach(object => {
+        object.update(ctx, canvas.width, canvas.height, objects);
+    });
+
+    drawEliminationCounter(ctx, canvas.width);
+
+    requestAnimationFrame(animate);
+}
+
+canvas.addEventListener("pointermove", event => {
+    const pointer = getPointerPosition(event);
+    mouseX = pointer.x;
+    mouseY = pointer.y;
+    updateHoveredObject(mouseX, mouseY);
+});
+
+canvas.addEventListener("pointerdown", event => {
+    const pointer = getPointerPosition(event);
+    mouseX = pointer.x;
+    mouseY = pointer.y;
+    updateHoveredObject(mouseX, mouseY);
+    removeHoveredObject();
+});
+
+canvas.addEventListener("mouseleave", () => {
+    hoveredObjectIndex = -1;
+    objects.forEach(object => {
+        object.isHovered = false;
+    });
+    canvas.style.cursor = "default";
+});
+
+function init() {
+    resizeCanvas();
+    generateObjects(TOTAL_OBJECTS);
+    animate();
+}
+
+let loadedAssets = 0;
+
+function assetReady() {
+    loadedAssets++;
+    if (loadedAssets === 2) {
+        init();
+    }
+}
+
+function assetError(name, path) {
+    console.error(`Error cargando ${name}: ${path}`);
+}
+
+backgroundImage.onload = assetReady;
+spriteImage.onload = assetReady;
+
+backgroundImage.onerror = () => assetError("fondo", backgroundImage.src);
+spriteImage.onerror = () => assetError("sprite", spriteImage.src);
+
+window.addEventListener("resize", resizeCanvas);
