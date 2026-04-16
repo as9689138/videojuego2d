@@ -57,6 +57,15 @@ function getSpeedLevel() {
     };
 }
 
+function randomBetween(min, max) {
+    return Math.random() * (max - min) + min;
+}
+
+function getRandomMovementType() {
+    const index = Math.floor(Math.random() * MOVEMENT_TYPES.length);
+    return MOVEMENT_TYPES[index];
+}
+
 class FallingObject {
     constructor(x, y, size, sprite, speedY, speedX = 0, movementType = "down") {
         this.posX = x;
@@ -79,10 +88,14 @@ class FallingObject {
 
         this.movementType = movementType;
 
+        // Cooldown para evitar colisiones repetidas inmediatas
+        this.collisionCooldown = 0;
+
         // Parámetros para movimiento circular
         this.angle = randomBetween(0, Math.PI * 2);
         this.angularSpeed = randomBetween(0.03, 0.06);
         this.orbitRadius = randomBetween(20, 45);
+
         this.centerX = x;
         this.centerY = y;
         this.centerDx = randomBetween(-1.2, 1.2);
@@ -172,6 +185,12 @@ class FallingObject {
         }
     }
 
+    updateCollisionCooldown() {
+        if (this.collisionCooldown > 0) {
+            this.collisionCooldown--;
+        }
+    }
+
     bounceWith(otherObject) {
         const dx = otherObject.posX - this.posX;
         const dy = otherObject.posY - this.posY;
@@ -184,7 +203,6 @@ class FallingObject {
         const unitX = dx / distance;
         const unitY = dy / distance;
 
-        // Separar objetos para que no queden encimados
         const overlap = (this.hitRadius + otherObject.hitRadius) - distance;
 
         if (overlap > 0) {
@@ -195,29 +213,32 @@ class FallingObject {
             otherObject.posY += unitY * (overlap / 2);
         }
 
-        // Magnitud base del rebote según la velocidad previa
         const speedThis = Math.sqrt(this.dx * this.dx + this.dy * this.dy) || 1.5;
         const speedOther = Math.sqrt(otherObject.dx * otherObject.dx + otherObject.dy * otherObject.dy) || 1.5;
 
         const reboundThis = Math.max(speedOther, 1.5);
         const reboundOther = Math.max(speedThis, 1.5);
 
-        // Salen despedidos en direcciones opuestas según la normal del choque
         this.dx = -unitX * reboundThis;
         this.dy = -unitY * reboundThis;
 
         otherObject.dx = unitX * reboundOther;
         otherObject.dy = unitY * reboundOther;
 
-        // Ambos pierden comportamiento especial y pasan a lineal
+        // Después del choque, ambos quedan lineales
         this.movementType = "linear";
         otherObject.movementType = "linear";
 
-        // Reiniciar datos circulares para que no sigan interfiriendo
+        // Reiniciar referencias circulares para evitar bloqueos
         this.centerX = this.posX;
         this.centerY = this.posY;
+
         otherObject.centerX = otherObject.posX;
         otherObject.centerY = otherObject.posY;
+
+        // Enfriamiento para no volver a colisionar de inmediato
+        this.collisionCooldown = 6;
+        otherObject.collisionCooldown = 6;
     }
 
     keepInside(canvasWidth, canvasHeight) {
@@ -237,10 +258,8 @@ class FallingObject {
             this.posY = canvasHeight - this.hitRadius;
         }
 
-        if (this.movementType === "circular") {
-            this.centerX = this.posX;
-            this.centerY = this.posY;
-        }
+        this.centerX = this.posX;
+        this.centerY = this.posY;
     }
 
     applySpeedLevel() {
@@ -254,11 +273,12 @@ class FallingObject {
             this.dx = randomBetween(-0.8, 0.8);
         } else if (this.movementType === "diagonal") {
             this.dx = randomBetween(-2.2, 2.2);
+            this.dy = randomBetween(-2.2, 2.2);
+
             if (Math.abs(this.dx) < 0.8) {
                 this.dx = this.dx < 0 ? -0.8 : 0.8;
             }
 
-            this.dy = randomBetween(-2.2, 2.2);
             if (Math.abs(this.dy) < 0.8) {
                 this.dy = this.dy < 0 ? -0.8 : 0.8;
             }
@@ -267,6 +287,12 @@ class FallingObject {
             this.orbitRadius = randomBetween(20, 45);
             this.centerDx = randomBetween(-1.5, 1.5);
             this.centerDy = randomBetween(-1.5, 1.5);
+        } else if (this.movementType === "linear") {
+            const speed = randomBetween(speedLevel.minY, speedLevel.maxY);
+            const angle = randomBetween(0, Math.PI * 2);
+
+            this.dx = Math.cos(angle) * speed;
+            this.dy = Math.sin(angle) * speed;
         }
     }
 
@@ -291,10 +317,12 @@ class FallingObject {
 
         this.flashFrames = 0;
         this.isHovered = false;
+        this.collisionCooldown = 0;
 
         this.angle = randomBetween(0, Math.PI * 2);
         this.angularSpeed = randomBetween(0.03, 0.06);
         this.orbitRadius = randomBetween(20, 45);
+
         this.centerX = this.posX;
         this.centerY = this.posY;
         this.centerDx = randomBetween(-1.2, 1.2);
@@ -308,6 +336,7 @@ class FallingObject {
             this.respawnFromRandomSide(allObjects, canvasWidth, canvasHeight);
         }
 
+        this.updateCollisionCooldown();
         this.restoreFlash();
         this.draw(context);
     }
@@ -483,10 +512,17 @@ function generateObjects(n) {
 function handleObjectCollisions() {
     for (let i = 0; i < objects.length; i++) {
         for (let j = i + 1; j < objects.length; j++) {
-            if (objects[i].isCollidingWith(objects[j])) {
-                objects[i].flashBlue();
-                objects[j].flashBlue();
-                objects[i].bounceWith(objects[j]);
+            const objectA = objects[i];
+            const objectB = objects[j];
+
+            if (
+                objectA.collisionCooldown === 0 &&
+                objectB.collisionCooldown === 0 &&
+                objectA.isCollidingWith(objectB)
+            ) {
+                objectA.flashBlue();
+                objectB.flashBlue();
+                objectA.bounceWith(objectB);
             }
         }
     }
