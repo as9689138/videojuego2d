@@ -573,7 +573,11 @@ function updateHoveredObject(pointerX, pointerY) {
         }
     }
 
-    canvas.style.cursor = hoveredObjectIndex !== -1 ? "pointer" : "default";
+    if (hoveredObjectIndex !== -1) {
+        canvas.style.cursor = "url('assets/img/raqueta.png') 16 16, pointer";
+    } else {
+        canvas.style.cursor = "url('assets/img/raqueta.png') 16 16, auto";
+    }
 }
 
 function removeHoveredObject() {
@@ -710,6 +714,7 @@ canvas.addEventListener("pointermove", event => {
     mouseX = pointer.x;
     mouseY = pointer.y;
     updateHoveredObject(mouseX, mouseY);
+
 });
 
 canvas.addEventListener("pointerdown", event => {
