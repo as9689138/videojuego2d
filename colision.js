@@ -14,10 +14,10 @@ let mouseY = 0;
 let hoveredObjectIndex = -1;
 
 const backgroundImage = new Image();
-backgroundImage.src = "assets/img/fondoEspacio.jpg";
+backgroundImage.src = "assets/img/fondo.jpg";
 
 const spriteImage = new Image();
-spriteImage.src = "assets/img/nave.png";
+spriteImage.src = "assets/img/pelota.png";
 
 function getRandomMovementType() {
     const index = Math.floor(Math.random() * MOVEMENT_TYPES.length);
@@ -73,9 +73,9 @@ class FallingObject {
 
         this.size = size;
 
-        this.width = size * 1.35;
-        this.height = size * 1.8;
-        this.hitRadius = size * 0.45;
+        this.width = size;
+        this.height = size;
+        this.hitRadius = size * 0.5;
 
         this.sprite = sprite;
 
@@ -484,7 +484,7 @@ function getSpawnVelocity(side) {
 }
 
 function createObject(existingObjects) {
-    const size = randomBetween(28, 48);
+    const size = randomBetween(36, 56);
     const hitRadius = size * 0.45;
     const position = findSpawnPosition(hitRadius, existingObjects, canvas.width, canvas.height);
     const movementType = getRandomMovementType();
