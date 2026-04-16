@@ -24,10 +24,23 @@
             <div class="row justify-content-center">
                 <div class="col-12">
                     <div class="collision-card shadow-sm">
-                        <div class="card-header-custom">
-                            <h1 class="title mb-1">Interactividad con gráficos 2D</h1>
-                            <p class="subtitle mb-0">
-                                Simulación interactiva de objetos en movimiento con detección de colisiones, eliminación por clic y respuesta visual en tiempo real.
+                        <div class="card-header-custom header-game">
+                            <div class="header-content">
+                                <img src="assets/img/jugadorTennis.png" alt="Icono del juego" class="game-icon">
+
+                                <div class="header-text">
+                                    <h1 class="title mb-1">Tennis Tournament</h1>
+                                    <p class="subtitle mb-0">
+                                        Simulador interactivo de pelotas de tenis en movimiento, donde rebotan, colisionan entre sí y reaccionan dinámicamente a cada interacción del jugador.
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="game-instructions">
+                            <p class="instructions-title mb-1">Instrucciones</p>
+                            <p class="instructions-text mb-0">
+                                Haz clic sobre la mayor cantidad de pelotas posibles. Cada golpe aumenta tu contador y acelera el juego, cambiando entre tres modos de velocidad: Inicial, Media y Alta. Las pelotas pueden moverse de forma lineal, diagonal o circular.
                             </p>
                         </div>
 
@@ -40,6 +53,12 @@
                         <div class="canvas-wrapper">
                             <canvas id="canvas"></canvas>
                         </div>
+
+                        <div class="footer-game">
+                            <p class="footer-title">Créditos</p>
+                            <p class="footer-text">Huerta Aguilar José Antonio 23200848</p>
+                            <p class="footer-text">Sánchez Ortega Adrián 23200899</p>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -48,6 +67,10 @@
 
     <audio id="bgMusic" loop>
         <source src="assets/audio/musica_fondo.mp3" type="audio/mpeg">
+    </audio>
+
+    <audio id="hitSound">
+        <source src="assets/audio/golpe.mp3" type="audio/mpeg">
     </audio>
 
     <script src="colision.js"></script>

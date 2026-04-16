@@ -2,7 +2,10 @@ const canvas = document.getElementById("canvas");
 let ctx = canvas.getContext("2d");
 
 const startGameBtn = document.getElementById("startGameBtn");
+
+// Efectos de sonido
 const bgMusic = document.getElementById("bgMusic");
+const hitSound = document.getElementById("hitSound");
 
 const TOTAL_OBJECTS = 25;
 const TOP_MARGIN = 12;
@@ -582,6 +585,8 @@ function updateHoveredObject(pointerX, pointerY) {
 
 function removeHoveredObject() {
     if (hoveredObjectIndex !== -1) {
+        playHitSound();
+
         objects.splice(hoveredObjectIndex, 1);
         eliminations++;
         hoveredObjectIndex = -1;
@@ -773,7 +778,7 @@ function startGame() {
 
     gameStarted = true;
 
-    bgMusic.volume = 0.3;
+    bgMusic.volume = 0.15; // Volumen más bajo para destacar el efecto de la pelota
     bgMusic.play().catch(error => {
         console.error("No se pudo reproducir la música:", error);
     });
@@ -784,4 +789,12 @@ function startGame() {
 }
 
 startGameBtn.addEventListener("click", startGame);
+
+function playHitSound() {
+    if (!hitSound) return;
+
+    hitSound.currentTime = 0; // reinicia para permitir múltiples clics rápidos
+    hitSound.volume = 0.5;    // volumen del efecto
+    hitSound.play().catch(() => {});
+}
 
