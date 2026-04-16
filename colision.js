@@ -1,6 +1,9 @@
 const canvas = document.getElementById("canvas");
 let ctx = canvas.getContext("2d");
 
+const startGameBtn = document.getElementById("startGameBtn");
+const bgMusic = document.getElementById("bgMusic");
+
 const TOTAL_OBJECTS = 25;
 const TOP_MARGIN = 12;
 
@@ -12,6 +15,8 @@ let eliminations = 0;
 let mouseX = 0;
 let mouseY = 0;
 let hoveredObjectIndex = -1;
+
+let gameStarted = false;
 
 const backgroundImage = new Image();
 backgroundImage.src = "assets/img/fondo.jpg";
@@ -697,6 +702,10 @@ function animate() {
 }
 
 canvas.addEventListener("pointermove", event => {
+    if (!gameStarted) {
+        return;
+    }
+
     const pointer = getPointerPosition(event);
     mouseX = pointer.x;
     mouseY = pointer.y;
@@ -704,6 +713,10 @@ canvas.addEventListener("pointermove", event => {
 });
 
 canvas.addEventListener("pointerdown", event => {
+    if (!gameStarted) {
+        return;
+    }
+
     const pointer = getPointerPosition(event);
     mouseX = pointer.x;
     mouseY = pointer.y;
@@ -722,7 +735,9 @@ canvas.addEventListener("mouseleave", () => {
 function init() {
     resizeCanvas();
     generateObjects(TOTAL_OBJECTS);
-    animate();
+    drawBackground();
+    objects.forEach(object => object.draw(ctx));
+    drawEliminationCounter(ctx);
 }
 
 let loadedAssets = 0;
@@ -745,3 +760,23 @@ backgroundImage.onerror = () => assetError("fondo", backgroundImage.src);
 spriteImage.onerror = () => assetError("sprite", spriteImage.src);
 
 window.addEventListener("resize", resizeCanvas);
+
+function startGame() {
+    if (gameStarted) {
+        return;
+    }
+
+    gameStarted = true;
+
+    bgMusic.volume = 0.3;
+    bgMusic.play().catch(error => {
+        console.error("No se pudo reproducir la música:", error);
+    });
+
+    startGameBtn.style.display = "none";
+
+    animate();
+}
+
+startGameBtn.addEventListener("click", startGame);
+

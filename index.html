@@ -3,7 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Interactividad 2D</title>
+    <title>Videojuego 2D</title>
+
+    <!-- Favicon -->
+    <link rel="icon" href="assets/img/icono.png" type="image/png">
 
     <!-- Bootstrap -->
     <link
@@ -28,6 +31,12 @@
                             </p>
                         </div>
 
+                        <div class="game-controls">
+                            <button id="startGameBtn" class="btn btn-primary start-btn">
+                                Comenzar juego
+                            </button>
+                        </div>
+
                         <div class="canvas-wrapper">
                             <canvas id="canvas"></canvas>
                         </div>
@@ -36,6 +45,10 @@
             </div>
         </div>
     </main>
+
+    <audio id="bgMusic" loop>
+        <source src="assets/audio/musica_fondo.mp3" type="audio/mpeg">
+    </audio>
 
     <script src="colision.js"></script>
 </body>
